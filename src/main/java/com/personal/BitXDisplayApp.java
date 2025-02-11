@@ -30,19 +30,41 @@ public class BitXDisplayApp extends Application {
     private static Canvas metersCanvas;
     private static Canvas knobsCanvas;
     private static TextFlow clipTextFlow;
-    private static float[] meterValues = new float[NUM_TRACKS];
+    private static float[] meterValues = new float[NUM_TRACKS + 1]; // ✅ +1 for master
 
     private ServerSocket serverSocket;
     private boolean running = true;
     private static Color[] trackColors = new Color[NUM_TRACKS];
+    private static Color masterTrackColor = Color.GRAY;
 
     private static Text pageTitle = new Text("No Page");
     private static Text[] knobLabels = new Text[8];
     private static double[] knobValues = new double[8];
 
+    private static boolean isRunning = false; // Ensure only one instance
+
     @Override
     public void start(Stage primaryStage) {
+        if (isRunning) {
+            System.out.println("BitXDisplayApp is already running!");
+            return;
+        }
+        isRunning = true;
+
+        primaryStage.setOnCloseRequest(event -> {
+            isRunning = false; // Reset flag when window is closed
+            stopServer();
+        });
+
+        // Set fixed window size
+        primaryStage.setResizable(false); // Prevent resizing
+       // primaryStage.setMinHeight(HEIGHT);
+       // primaryStage.setMaxHeight(HEIGHT);
+        primaryStage.setMinWidth(TEXT_WIDTH + KNOBS_WIDTH + METERS_WIDTH);
+        primaryStage.setMaxWidth(TEXT_WIDTH + KNOBS_WIDTH + METERS_WIDTH);
+
         log("Starting JavaFX application...");
+
 
         // 🎵 Left: Clip Text Area (900px)
         clipTextFlow = new TextFlow();
@@ -82,7 +104,17 @@ public class BitXDisplayApp extends Application {
 
         log("JavaFX application started. Opening server socket...");
         new Thread(this::listenForUpdates).start();
+
+        new Thread(() -> {
+            try {
+                Thread.sleep(500); // Allow UI to fully initialize
+
+            } catch (InterruptedException e) {
+                logError("Error while requesting Bitwig state update: " + e.getMessage());
+            }
+        }).start();
     }
+
 
     private void stopServer() {
         log("Stopping server...");
@@ -96,6 +128,7 @@ public class BitXDisplayApp extends Application {
             logError("Error closing server socket: " + e.getMessage());
         }
     }
+
 
     private void listenForUpdates() {
         try {
@@ -123,18 +156,6 @@ public class BitXDisplayApp extends Application {
 
     private void handleIncomingData(String line) {
         Platform.runLater(() -> {
-            if (line.startsWith("COLOR:")) {
-                String[] parts = line.split(":");
-                int trackIndex = Integer.parseInt(parts[1]);
-                int red = Integer.parseInt(parts[2]);
-                int green = Integer.parseInt(parts[3]);
-                int blue = Integer.parseInt(parts[4]);
-
-                Platform.runLater(() -> {
-                    trackColors[trackIndex] = Color.rgb(red, green, blue);
-                    drawMeters();
-                });
-            }
             if (line.startsWith("CLIP:")) {
                 String clipName = line.substring(5);
                 log("Updating clip name to: " + clipName);
@@ -157,8 +178,42 @@ public class BitXDisplayApp extends Application {
                 meterValues[trackIndex] = Float.parseFloat(parts[2]) / 127.0f;
                 drawMeters();
             }
+            else if (line.startsWith("MASTER_VU:")) {
+                String[] parts = line.split(":");
+                float masterMeterValue = Float.parseFloat(parts[1]) / 127.0f;
+
+                System.out.println("✅ Master Meter Received: " + masterMeterValue);
+
+                meterValues[NUM_TRACKS] = masterMeterValue; // Store master VU in the extra slot
+
+                Platform.runLater(this::drawMeters); // Redraw all meters
+            }
+            else if (line.startsWith("COLOR:")) {
+                String[] parts = line.split(":");
+                int trackIndex = Integer.parseInt(parts[1]);
+                int red = Integer.parseInt(parts[2]);
+                int green = Integer.parseInt(parts[3]);
+                int blue = Integer.parseInt(parts[4]);
+
+                Platform.runLater(() -> {
+                    trackColors[trackIndex] = Color.rgb(red, green, blue);
+                    drawMeters();
+                });
+            }
+
+            else if (line.startsWith("MASTER_COLOR:")) {
+                String[] parts = line.split(":");
+                int red = Integer.parseInt(parts[1]);
+                int green = Integer.parseInt(parts[2]);
+                int blue = Integer.parseInt(parts[3]);
+
+                masterTrackColor = Color.rgb(red, green, blue); // ✅ Store master color
+                System.out.println("✅ Master Track Color Received: " + masterTrackColor);
+                drawMeters(); // ✅ Redraw meters with the new color
+            }
         });
     }
+
 
     private void updateClipText(String clipName) {
         clipTextFlow.getChildren().clear();
@@ -271,61 +326,61 @@ public class BitXDisplayApp extends Application {
 
     private void drawMeters() {
         log("Drawing meters...");
-        long startTime = System.nanoTime();
-
         GraphicsContext gc = metersCanvas.getGraphicsContext2D();
         gc.clearRect(0, 0, metersCanvas.getWidth(), metersCanvas.getHeight());
 
-        double meterWidth = metersCanvas.getWidth() / NUM_TRACKS;
+        double meterWidth = metersCanvas.getWidth() / (NUM_TRACKS + 1); // Add space for master
         double canvasHeight = metersCanvas.getHeight();
-        double meterHeight = canvasHeight * 0.8;  // 80% height for meters
-        double loopHeight = canvasHeight * 0.2;   // 20% height for loop progress
+        double meterHeight = canvasHeight * 0.8;
+        double loopHeight = canvasHeight * 0.2;
 
-        // Adjusted dB Reference Lines (Including +6 dB)
-        double[] dbValues = { 6, 0, -6, -12, -18, -24, -36, -60 };
-        double[] normalizedLevels = new double[dbValues.length];
-
-        for (int j = 0; j < dbValues.length; j++) {
-            normalizedLevels[j] = dBToNormalized(dbValues[j]);
-        }
-
+        // 🎚️ Draw Track Meters
         for (int i = 0; i < NUM_TRACKS; i++) {
-            double x = i * meterWidth; // Define x per track
-
-            double dB = bitwigValueToDb((int) (meterValues[i] * 128));
-            double y = meterHeight - (meterHeight * dBToNormalized(dB));
-
-            // Draw Background
-            gc.setFill(Color.DARKGRAY);
-            gc.fillRect(x + 5, 0, meterWidth - 10, meterHeight);
-
-            // Draw Track Color Bar Below Meter
-            gc.setFill(trackColors[i] != null ? trackColors[i] : Color.GRAY);
-            gc.fillRect(x + 5, meterHeight + 2, meterWidth - 10, loopHeight - 2);
-
-            // **🔥 Apply RMS-Based Color Mapping**
-            gc.setFill(getMeterColor(dB));
-            gc.fillRect(x + 5, y, meterWidth - 10, meterHeight - y);
-
-            // Peak Indicator (Red Line at +6 dB)
-            if (dB >= 6.0) {
-                gc.setFill(Color.RED);
-                gc.fillRect(x + 5, 0, meterWidth - 10, 3);
-            }
-
-            // Draw Reference Lines (Aligned to RMS Levels)
-            gc.setStroke(Color.WHITE);
-            gc.setLineWidth(1);
-            for (double normLevel : normalizedLevels) {
-                double lineY = meterHeight - (meterHeight * normLevel);
-                gc.strokeLine(x + 5, lineY, x + meterWidth - 5, lineY);
-            }
+            drawVuMeter(gc, i, meterWidth, meterHeight, loopHeight, meterValues[i], trackColors[i]);
         }
 
-      //  long endTime = System.nanoTime();
-    //    log("Meters drawn in " + (endTime - startTime) / 1_000_000.0 + " ms.");
+        // 🎚️ Draw Master Meter
+        drawVuMeter(gc, NUM_TRACKS, meterWidth, meterHeight, loopHeight, meterValues[NUM_TRACKS], masterTrackColor);
+
+        log("Meters drawn.");
     }
 
+    /**
+     * Draws a single VU meter at a given position.
+     */
+    private void drawVuMeter(GraphicsContext gc, int index, double meterWidth, double meterHeight, double loopHeight, float vuValue, Color trackColor) {
+        double x = index * meterWidth;
+        double y = meterHeight - (meterHeight * vuValue);
+
+        // 🎨 Draw Background
+        gc.setFill(Color.DARKGRAY);
+        gc.fillRect(x + 5, 0, meterWidth - 10, meterHeight);
+
+        // 🎨 Draw Track Color Bar
+        gc.setFill(trackColor != null ? trackColor : Color.GRAY);
+        gc.fillRect(x + 5, meterHeight + 2, meterWidth - 10, loopHeight - 2);
+
+        // 🎨 Apply RMS-Based Color Mapping
+        double dB = bitwigValueToDb((int) (vuValue * 128));
+        gc.setFill(getMeterColor(dB));
+        gc.fillRect(x + 5, y, meterWidth - 10, meterHeight - y);
+
+        // 🔴 Peak Indicator
+        if (dB >= 6.0) {
+            gc.setFill(Color.RED);
+            gc.fillRect(x + 5, 0, meterWidth - 10, 3);
+        }
+
+        // ⚡ Draw Stripes (Reference dB Levels)
+        gc.setStroke(Color.WHITE);
+        gc.setLineWidth(1);
+        double[] dbValues = {6, 0, -6, -12, -18, -24, -36, -60};
+        for (double dbLevel : dbValues) {
+            double normLevel = dBToNormalized(dbLevel);
+            double lineY = meterHeight - (meterHeight * normLevel);
+            gc.strokeLine(x + 5, lineY, x + meterWidth - 5, lineY);
+        }
+    }
 
 
 
@@ -339,12 +394,6 @@ public class BitXDisplayApp extends Application {
         if (dB >= -36) return Color.web("#008000"); // -36 dB → Dark Green (Very Low)
         return Color.DARKBLUE;                     // Below -60 dB → Dark Blue (Silent)
     }
-
-
-
-
-
-
 
     private void log(String message) {
         System.out.println("INFO: " + message);

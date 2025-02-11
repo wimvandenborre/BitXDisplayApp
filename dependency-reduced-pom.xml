@@ -14,7 +14,7 @@
         <configuration>
           <archive>
             <manifest>
-              <mainClass>com.personal.BitXDisplayApp</mainClass>
+              <mainClass>com.personal.Launcher</mainClass>
             </manifest>
           </archive>
         </configuration>
@@ -29,30 +29,17 @@
       </plugin>
       <plugin>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>3.3.0</version>
         <executions>
           <execution>
-            <phase>package</phase>
             <goals>
               <goal>shade</goal>
             </goals>
             <configuration>
-              <filters>
-                <filter>
-                  <artifact>*:*</artifact>
-                  <excludes>
-                    <exclude>META-INF/*.SF</exclude>
-                    <exclude>META-INF/*.DSA</exclude>
-                    <exclude>META-INF/*.RSA</exclude>
-                    <exclude>module-info.class</exclude>
-                  </excludes>
-                </filter>
-              </filters>
+              <shadedArtifactAttached>true</shadedArtifactAttached>
               <transformers>
                 <transformer>
-                  <mainClass>com.personal.BitXDisplayApp</mainClass>
+                  <mainClass>com.personal.Launcher</mainClass>
                 </transformer>
-                <transformer />
               </transformers>
             </configuration>
           </execution>
