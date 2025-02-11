@@ -7,7 +7,9 @@ import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.ArcType;
 import javafx.scene.text.Text;
 import javafx.scene.text.Font;
 import javafx.scene.text.TextFlow;
@@ -19,43 +21,57 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 public class BitXDisplayApp extends Application {
-    private static final int NUM_TRACKS = 8;  // Number of meters (and loops)
-    private static Canvas canvas;
-    private static TextFlow clipTextFlow; // Text display
+    private static final int NUM_TRACKS = 8;  // Number of meters
+    private static final int TEXT_WIDTH = 700;
+    private static final int KNOBS_WIDTH = 500;
+    private static final int METERS_WIDTH = 312;
+    private static final int HEIGHT = 70;
+
+    private static Canvas metersCanvas;
+    private static Canvas knobsCanvas;
+    private static TextFlow clipTextFlow;
     private static float[] meterValues = new float[NUM_TRACKS];
-    private static float[] loopProgressValues = new float[NUM_TRACKS]; // Stores loop progress per track
 
     private ServerSocket serverSocket;
     private boolean running = true;
-
     private static Color[] trackColors = new Color[NUM_TRACKS];
-    private double[] clipLengths = new double[NUM_TRACKS]; // Store clip lengths per track
+
+    private static Text pageTitle = new Text("No Page");
+    private static Text[] knobLabels = new Text[8];
+    private static double[] knobValues = new double[8];
 
     @Override
     public void start(Stage primaryStage) {
         log("Starting JavaFX application...");
 
-        // 🎵 Left Side: Clip Name Display
+        // 🎵 Left: Clip Text Area (900px)
         clipTextFlow = new TextFlow();
-        clipTextFlow.setStyle("-fx-background-color: black; -fx-padding: 0; -fx-alignment: top-left;");
-        clipTextFlow.setMinWidth(1200);
-        clipTextFlow.setPrefWidth(1200);
+        clipTextFlow.setStyle("-fx-background-color: rgb(65, 65, 65); -fx-padding: 0;");
+        clipTextFlow.setMinWidth(TEXT_WIDTH);
+        clipTextFlow.setPrefWidth(TEXT_WIDTH);
 
-        // Initialize default text
         Text initialText = new Text("No Clip");
-        initialText.setFont(Font.font("Arial", 30));
+        initialText.setFont(Font.font("Arial", 18));
         initialText.setFill(Color.YELLOW);
         clipTextFlow.getChildren().add(initialText);
 
         StackPane clipPane = new StackPane(clipTextFlow);
-        clipPane.setStyle("-fx-background-color: black; -fx-padding: 0;");
+        clipPane.setStyle("-fx-background-color: rgb(65, 65, 65); -fx-padding: 0;");
 
-        // 🎚️ Right Side: Meters & Loop Progress (Canvas)
-        canvas = new Canvas(312, 70);
-        canvas.setStyle("-fx-background-color: black;");
 
-        HBox root = new HBox(clipPane, canvas);
-        Scene scene = new Scene(root, 1512, 70, Color.BLACK);
+        // 🎛️ Middle: Knobs Area (300px)
+        knobsCanvas = new Canvas(KNOBS_WIDTH, HEIGHT);
+        StackPane knobsPane = new StackPane(knobsCanvas);
+        knobsPane.setStyle("-fx-background-color: rgb(65, 65, 65);");
+
+        // 🎚️ Right: VU Meters (312px)
+        metersCanvas = new Canvas(METERS_WIDTH, HEIGHT);
+        StackPane metersPane = new StackPane(metersCanvas);
+        metersPane.setStyle("-fx-background-color: rgb(65, 65, 65);");
+
+        // Layout
+        HBox root = new HBox(clipPane, knobsPane, metersPane);
+        Scene scene = new Scene(root, TEXT_WIDTH + KNOBS_WIDTH + METERS_WIDTH, HEIGHT, Color.BLACK);
 
         primaryStage.setScene(scene);
         primaryStage.setTitle("BitX Display");
@@ -69,7 +85,7 @@ public class BitXDisplayApp extends Application {
     }
 
     private void stopServer() {
-        log("Stopping server and closing connections...");
+        log("Stopping server...");
         running = false;
         try {
             if (serverSocket != null) {
@@ -84,69 +100,16 @@ public class BitXDisplayApp extends Application {
     private void listenForUpdates() {
         try {
             serverSocket = new ServerSocket(9876);
-            log("Server socket opened on port 9876. Listening for connections...");
+            log("Server socket opened on port 9876.");
 
             while (running) {
-                log("Waiting for a connection...");
                 Socket clientSocket = serverSocket.accept();
-                log("Connection received!");
-
                 BufferedReader reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
                 String line = reader.readLine();
                 clientSocket.close();
-                log("Received data: " + line);
 
                 if (line != null && !line.isEmpty()) {
-                    if (line.startsWith("COLOR:")) {
-                        String[] parts = line.split(":");
-                        int trackIndex = Integer.parseInt(parts[1]);
-                        int red = Integer.parseInt(parts[2]);
-                        int green = Integer.parseInt(parts[3]);
-                        int blue = Integer.parseInt(parts[4]);
-
-                        Platform.runLater(() -> {
-                            trackColors[trackIndex] = Color.rgb(red, green, blue);
-                            drawMeters();
-                        });
-                    }
-                    if (line.startsWith("CLIP:")) {
-                        String clipName = line.substring(5);
-                        log("Updating clip name to: " + clipName);
-                        Platform.runLater(() -> updateClipText(clipName));
-                    }
-                    if (line.startsWith("VU:")) {
-                        String[] parts = line.split(":");
-                        int trackIndex = Integer.parseInt(parts[1]);
-                        int vuValue = Integer.parseInt(parts[2]);
-
-                        Platform.runLater(() -> {
-                            meterValues[trackIndex] = vuValue / 127.0f; // Normalize to 0.0 - 1.0
-                            drawMeters();
-                        });
-                    }
-//                    if (line.startsWith("LOOP:")) {
-//                        String[] parts = line.split(":");
-//
-//                        if (parts.length < 4) {
-//                            logError("Invalid LOOP message format: " + line);
-//                            return;
-//                        }
-//
-//                        int trackIndex = Integer.parseInt(parts[1]);
-//                        float progress = Float.parseFloat(parts[2]);
-//                        float clipLength = Float.parseFloat(parts[3]); // ✅ Get clip length
-//
-//                        log("✅ Updating loop progress: Track " + trackIndex +
-//                                " Progress: " + progress + " Length: " + clipLength);
-//
-//                        Platform.runLater(() -> {
-//                            loopProgressValues[trackIndex] = progress;
-//                            clipLengths[trackIndex] = clipLength; // ✅ Store clip length
-//                            drawMeters();
-//                        });
-//                    }
-
-
+                    handleIncomingData(line);
                 }
             }
         } catch (Exception e) {
@@ -154,9 +117,47 @@ public class BitXDisplayApp extends Application {
                 log("Server stopped.");
             } else {
                 logError("Error in listenForUpdates: " + e.getMessage());
-                e.printStackTrace();
             }
         }
+    }
+
+    private void handleIncomingData(String line) {
+        Platform.runLater(() -> {
+            if (line.startsWith("COLOR:")) {
+                String[] parts = line.split(":");
+                int trackIndex = Integer.parseInt(parts[1]);
+                int red = Integer.parseInt(parts[2]);
+                int green = Integer.parseInt(parts[3]);
+                int blue = Integer.parseInt(parts[4]);
+
+                Platform.runLater(() -> {
+                    trackColors[trackIndex] = Color.rgb(red, green, blue);
+                    drawMeters();
+                });
+            }
+            if (line.startsWith("CLIP:")) {
+                String clipName = line.substring(5);
+                log("Updating clip name to: " + clipName);
+                Platform.runLater(() -> updateClipText(clipName));
+            }
+            if (line.startsWith("PAGE:")) {
+                String pageName = line.substring(5);
+                updateRemoteControlsPageName(pageName);
+            } else if (line.startsWith("KNOB_NAME:")) {
+                String[] parts = line.split(":");
+                int index = Integer.parseInt(parts[1]);
+                updateKnobName(index, parts[2]);
+            } else if (line.startsWith("KNOB_VALUE:")) {
+                String[] parts = line.split(":");
+                int index = Integer.parseInt(parts[1]);
+                updateKnobValue(index, Double.parseDouble(parts[2]));
+            } else if (line.startsWith("VU:")) {
+                String[] parts = line.split(":");
+                int trackIndex = Integer.parseInt(parts[1]);
+                meterValues[trackIndex] = Float.parseFloat(parts[2]) / 127.0f;
+                drawMeters();
+            }
+        });
     }
 
     private void updateClipText(String clipName) {
@@ -164,64 +165,186 @@ public class BitXDisplayApp extends Application {
 
         // Create text chunks for wrapping
         Text text = new Text(clipName);
-        text.setFont(Font.font("Arial", 30));
+        text.setFont(Font.font("Arial", 22));
         text.setFill(Color.YELLOW);
 
         clipTextFlow.getChildren().add(text);
 
-        clipTextFlow.setPrefWidth(1200);
-        clipTextFlow.setMaxHeight(60); // Max height to allow two lines
+        clipTextFlow.setPrefWidth(700);
+        clipTextFlow.setMaxHeight(65); // Max height to allow two lines
     }
+
+    private static void updateRemoteControlsPageName(String name) {
+        pageTitle.setText(name);
+        drawKnobs();
+    }
+
+    private static void updateKnobName(int index, String name) {
+        knobLabels[index] = new Text(name);
+        drawKnobs();
+    }
+
+    private static void updateKnobValue(int index, double value) {
+        knobValues[index] = value;
+        drawKnobs();
+    }
+
+    private static void drawKnobs() {
+        GraphicsContext gc = knobsCanvas.getGraphicsContext2D();
+        gc.clearRect(0, 0, KNOBS_WIDTH, HEIGHT);
+
+        // Adjust title font and position
+        gc.setFill(Color.WHITE);
+        gc.setFont(Font.font("Arial", 8)); // Smaller title font
+       // gc.fillText(pageTitle.getText(), (KNOBS_WIDTH - gc.getFont().getSize() * pageTitle.getText().length() / 2) / 2, 15); // Title positioned higher
+
+        // Knob dimensions
+        double knobDiameter = 28; // Knob size
+        double outerDiameter = knobDiameter + 10; // Outer ring slightly larger
+        double spacing = 20; // Spacing between knobs
+        double startX = (KNOBS_WIDTH - (8 * (outerDiameter + spacing))); // Center the knobs horizontally
+        double startY = 10; // Starting y position for the first row
+
+        for (int i = 0; i < 8; i++) {
+            double x = startX + (i % 8) * (outerDiameter + spacing);
+            double y = startY;
+
+            // Draw outer progress ring
+            gc.setStroke(Color.rgb(103, 103,103));
+            gc.setLineWidth(3);
+            gc.strokeOval(x, y, outerDiameter, outerDiameter);
+
+            // Draw progress in orange, starting from bottom-left (-140°) and moving clockwise
+            double valueAngle = knobValues[i] * 270; // Map knob value (0-1) to 0°-320°
+            gc.setStroke(Color.rgb(254,125,17));
+            gc.setLineWidth(3);
+            gc.strokeArc(x, y, outerDiameter, outerDiameter, -135, -valueAngle, ArcType.OPEN); // Negative value to reverse direction
+
+            // Draw knob base
+            gc.setFill(Color.rgb(125,125,125)); // Updated for improved contrast
+            gc.fillOval(x + 5, y + 5, knobDiameter, knobDiameter);
+
+            // Draw white stripe, synchronized with the orange arc
+            double stripeAngle = knobValues[i] * 270 - 225; // Adjusted angle to start from -140°
+            double centerX = x + outerDiameter / 2;
+            double centerY = y + outerDiameter / 2;
+            double lineX = centerX + Math.cos(Math.toRadians(stripeAngle)) * (knobDiameter / 2 - 2);
+            double lineY = centerY + Math.sin(Math.toRadians(stripeAngle)) * (knobDiameter / 2 - 2);
+
+            gc.setStroke(Color.WHITE);
+            gc.setLineWidth(2);
+            gc.strokeLine(centerX, centerY, lineX, lineY);
+
+            // Draw knob label
+            gc.setFill(Color.WHITE);
+            gc.setFont(Font.font("Arial", 10)); // Font size remains the same
+
+// Ensure the label is not null and truncate it to 8 characters
+            String label = (knobLabels[i] != null) ? knobLabels[i].getText() : "Knob " + (i + 1);
+            label = label.length() > 8 ? label.substring(0, 8) : label; // Truncate to 8 characters
+
+// Draw the truncated label
+            gc.fillText(label, x + outerDiameter / 2 - label.length() * 3, y + outerDiameter + 14);
+
+        }
+    }
+
+    private static double bitwigValueToDb(int bitwigValue) {
+        if (bitwigValue <= 0) return -60.0;  // If zero, assume below -60 dB
+        if (bitwigValue >= 128) return 6.0;  // Full scale (128) is now +6 dB
+
+        // Convert Bitwig's 0-128 range into dB scale
+        return -60.0 + (bitwigValue / 128.0) * 66.0;  // Scale from -60 dB to +6 dB
+    }
+
+
+    private static double dBToNormalized(double dB) {
+        double minDb = -60.0;  // Silence threshold
+        double maxDb = 6.0;    // Full scale (Bitwig goes to +6 dB)
+
+        if (dB <= minDb) return 0.0; // Below -60 dB → Consider it silence
+        if (dB >= maxDb) return 1.0; // At +6 dB → Full height
+
+        return (dB - minDb) / (maxDb - minDb); // Scale from -60 dB to +6 dB in a 0-1 range
+    }
+
 
     private void drawMeters() {
         log("Drawing meters...");
         long startTime = System.nanoTime();
 
-        GraphicsContext gc = canvas.getGraphicsContext2D();
-        gc.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
+        GraphicsContext gc = metersCanvas.getGraphicsContext2D();
+        gc.clearRect(0, 0, metersCanvas.getWidth(), metersCanvas.getHeight());
 
-        double meterWidth = canvas.getWidth() / NUM_TRACKS;
-        double canvasHeight = canvas.getHeight();
+        double meterWidth = metersCanvas.getWidth() / NUM_TRACKS;
+        double canvasHeight = metersCanvas.getHeight();
         double meterHeight = canvasHeight * 0.8;  // 80% height for meters
         double loopHeight = canvasHeight * 0.2;   // 20% height for loop progress
 
+        // Adjusted dB Reference Lines (Including +6 dB)
+        double[] dbValues = { 6, 0, -6, -12, -18, -24, -36, -60 };
+        double[] normalizedLevels = new double[dbValues.length];
+
+        for (int j = 0; j < dbValues.length; j++) {
+            normalizedLevels[j] = dBToNormalized(dbValues[j]);
+        }
+
         for (int i = 0; i < NUM_TRACKS; i++) {
-            double x = i * meterWidth;
-            double y = meterHeight - (meterHeight * meterValues[i]);
+            double x = i * meterWidth; // Define x per track
 
-            // Draw track color background under the meter
-            gc.setFill(trackColors[i] != null ? trackColors[i] : Color.GRAY);
-            gc.fillRect(x + 5, meterHeight + 2, meterWidth - 10, loopHeight - 2); // Draw color bar
+            double dB = bitwigValueToDb((int) (meterValues[i] * 128));
+            double y = meterHeight - (meterHeight * dBToNormalized(dB));
 
-            // Draw meter background
+            // Draw Background
             gc.setFill(Color.DARKGRAY);
             gc.fillRect(x + 5, 0, meterWidth - 10, meterHeight);
 
-            // Draw meter level
-            gc.setFill(getMeterColor(meterValues[i]));
-            gc.fillRect(x + 5, y, meterWidth - 10, meterHeight * meterValues[i]);
+            // Draw Track Color Bar Below Meter
+            gc.setFill(trackColors[i] != null ? trackColors[i] : Color.GRAY);
+            gc.fillRect(x + 5, meterHeight + 2, meterWidth - 10, loopHeight - 2);
 
-            // ✅ Use track color for the loop progress bar
-//            if (loopProgressValues[i] > 0) {
-//                Color trackColor = trackColors[i] != null ? trackColors[i] : Color.LIMEGREEN;
-//                gc.setFill(trackColor);
-//                double loopWidth = (meterWidth - 10) * loopProgressValues[i]; // Ensure same width as meter
-//                gc.fillRect(x + 5, meterHeight, loopWidth, loopHeight);
-//            }
+            // **🔥 Apply RMS-Based Color Mapping**
+            gc.setFill(getMeterColor(dB));
+            gc.fillRect(x + 5, y, meterWidth - 10, meterHeight - y);
+
+            // Peak Indicator (Red Line at +6 dB)
+            if (dB >= 6.0) {
+                gc.setFill(Color.RED);
+                gc.fillRect(x + 5, 0, meterWidth - 10, 3);
+            }
+
+            // Draw Reference Lines (Aligned to RMS Levels)
+            gc.setStroke(Color.WHITE);
+            gc.setLineWidth(1);
+            for (double normLevel : normalizedLevels) {
+                double lineY = meterHeight - (meterHeight * normLevel);
+                gc.strokeLine(x + 5, lineY, x + meterWidth - 5, lineY);
+            }
         }
 
-        long endTime = System.nanoTime();
-        log("Meters drawn in " + (endTime - startTime) / 1_000_000.0 + " ms.");
+      //  long endTime = System.nanoTime();
+    //    log("Meters drawn in " + (endTime - startTime) / 1_000_000.0 + " ms.");
     }
 
 
-    private Color getMeterColor(double level) {
-        if (level > 0.8) return Color.RED;
-        if (level > 0.6) return Color.ORANGE;
-        if (level > 0.4) return Color.YELLOW;
-        if (level > 0.2) return Color.LIME;
-        return Color.DARKBLUE;
+
+
+    private static Color getMeterColor(double dB) {
+        if (dB >= 0.1) return Color.web("#800000");  // Bordeaux (Clipping)
+        if (dB >= 0) return Color.RED;             // 0 dB → Red (Loud)
+        if (dB >= -6) return Color.web("#FF4500"); // -6 dB → Orange-Red (Hot)
+        if (dB >= -12) return Color.ORANGE;        // -12 dB → Orange (Safe Zone)
+        if (dB >= -18) return Color.YELLOW;        // -18 dB → Yellow (Medium)
+        if (dB >= -24) return Color.LIMEGREEN;     // -24 dB → Lime Green (Low)
+        if (dB >= -36) return Color.web("#008000"); // -36 dB → Dark Green (Very Low)
+        return Color.DARKBLUE;                     // Below -60 dB → Dark Blue (Silent)
     }
+
+
+
+
+
+
 
     private void log(String message) {
         System.out.println("INFO: " + message);
