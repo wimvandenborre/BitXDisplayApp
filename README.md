@@ -15,7 +15,7 @@ simple text messages sent over a local TCP socket.
 download BitX (master extension for the displayapp) from
 https://personalaudio.lemonsqueezy.com/
 
-Put the whole PerSonal folder inside the Bitwig Studio Extensions folder.
+Create a 'PerSonal' folder inside the Bitwig Studio Extensions folder and put the files in it.
 
 ## Tech stack
 
