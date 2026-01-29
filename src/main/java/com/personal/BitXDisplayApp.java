@@ -26,6 +26,7 @@ public class BitXDisplayApp extends Application {
     private static final int KNOBS_WIDTH = 500;
     private static final int METERS_WIDTH = 312;
     private static final int HEIGHT = 70;
+    private static final int PAGE_TITLE_WIDTH = 30;
 
     private static Canvas metersCanvas;
     private static Canvas knobsCanvas;
@@ -218,16 +219,19 @@ public class BitXDisplayApp extends Application {
     private void updateClipText(String clipName) {
         clipTextFlow.getChildren().clear();
 
-        // Create text chunks for wrapping
-        Text text = new Text(clipName);
+        // 🔁 Replace '|' with actual line breaks
+        String processedName = clipName.replace("|", "\n");
+
+        Text text = new Text(processedName);
         text.setFont(Font.font("Arial", 22));
         text.setFill(Color.YELLOW);
 
         clipTextFlow.getChildren().add(text);
 
         clipTextFlow.setPrefWidth(700);
-        clipTextFlow.setMaxHeight(65); // Max height to allow two lines
+        clipTextFlow.setMaxHeight(65); // allow multiple lines
     }
+
 
     private static void updateRemoteControlsPageName(String name) {
         pageTitle.setText(name);
@@ -248,16 +252,43 @@ public class BitXDisplayApp extends Application {
         GraphicsContext gc = knobsCanvas.getGraphicsContext2D();
         gc.clearRect(0, 0, KNOBS_WIDTH, HEIGHT);
 
-        // Adjust title font and position
+        // Page title (vertical, left of remotes)
         gc.setFill(Color.WHITE);
-        gc.setFont(Font.font("Arial", 8)); // Smaller title font
-       // gc.fillText(pageTitle.getText(), (KNOBS_WIDTH - gc.getFont().getSize() * pageTitle.getText().length() / 2) / 2, 15); // Title positioned higher
+        String title = pageTitle.getText();
+        if (title == null) {
+            title = "";
+        }
+        title = title.toUpperCase();
+        double baseFontSize = 8.0;
+        double minFontSize = 6.0;
+        double maxFontSize = baseFontSize;
+        double targetSize = maxFontSize;
+        if (!title.isEmpty()) {
+            double fitSize = HEIGHT / (double) title.length();
+            targetSize = Math.max(minFontSize, Math.min(maxFontSize, fitSize));
+        }
+        Font titleFont = Font.font("Arial", targetSize);
+        gc.setFont(titleFont);
+        double lineHeight = Math.max(1.0, titleFont.getSize());
+        if (!title.isEmpty()) {
+            double startY = lineHeight;
+            double x = PAGE_TITLE_WIDTH - 14;
+            double y = startY;
+            for (int i = 0; i < title.length(); i++) {
+                char ch = title.charAt(i);
+                if (ch != ' ') {
+                    gc.fillText(String.valueOf(ch), x, y);
+                }
+                y += (ch == ' ') ? (lineHeight * 0.5) : lineHeight;
+            }
+        }
 
         // Knob dimensions
         double knobDiameter = 28; // Knob size
         double outerDiameter = knobDiameter + 10; // Outer ring slightly larger
         double spacing = 20; // Spacing between knobs
-        double startX = (KNOBS_WIDTH - (8 * (outerDiameter + spacing))); // Center the knobs horizontally
+        double totalKnobsWidth = 8 * (outerDiameter + spacing);
+        double startX = PAGE_TITLE_WIDTH + (KNOBS_WIDTH - PAGE_TITLE_WIDTH - totalKnobsWidth) / 2;
         double startY = 10; // Starting y position for the first row
 
         for (int i = 0; i < 8; i++) {
