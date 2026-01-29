@@ -10,6 +10,13 @@ overlay. It renders three horizontal sections:
 The UI is drawn using JavaFX `Canvas` for low-latency rendering and updated by
 simple text messages sent over a local TCP socket.
 
+## If you just want to run the app:
+
+download BitX (master extension for the displayapp) from
+https://personalaudio.lemonsqueezy.com/
+
+Put the whole PerSonal folder inside the Bitwig Studio Extensions folder.
+
 ## Tech stack
 
 - Java 17+ (recommended)
