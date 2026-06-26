@@ -3,7 +3,7 @@
 BitXDisplayApp is a small JavaFX display app intended for a compact, fixed-size
 overlay. It renders three horizontal sections:
 
-- Clip text (left)
+- Clip text and live selected-track harmony (left)
 - Remote knobs (center)
 - VU meters (right)
 
@@ -49,6 +49,8 @@ The app listens on TCP port `9876` and accepts single-line messages. Supported
 messages:
 
 - `CLIP:<text>` - set clip name (use `|` for line breaks)
+- `PLAYING_NOTES:<note names>` - set current selected-track MIDI notes
+- `PLAYING_CHORD:<chord name>` - set current selected-track chord name
 - `PAGE:<text>` - set remote controls page name
 - `KNOB_NAME:<index>:<text>` - set a knob label (index 0-7)
 - `KNOB_VALUE:<index>:<0..1>` - set knob value (0-1)

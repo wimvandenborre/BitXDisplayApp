@@ -10,6 +10,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.ArcType;
+import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Text;
 import javafx.scene.text.Font;
 import javafx.scene.text.TextFlow;
@@ -23,6 +24,8 @@ import java.net.Socket;
 public class BitXDisplayApp extends Application {
     private static final int NUM_TRACKS = 8;  // Number of meters
     private static final int TEXT_WIDTH = 700;
+    private static final int CLIP_TEXT_WIDTH = 590;
+    private static final int HARMONY_WIDTH = TEXT_WIDTH - CLIP_TEXT_WIDTH;
     private static final int KNOBS_WIDTH = 500;
     private static final int METERS_WIDTH = 312;
     private static final int HEIGHT = 70;
@@ -31,6 +34,8 @@ public class BitXDisplayApp extends Application {
     private static Canvas metersCanvas;
     private static Canvas knobsCanvas;
     private static TextFlow clipTextFlow;
+    private static Text notesText;
+    private static Text chordText;
     private static float[] meterValues = new float[NUM_TRACKS + 1]; // ✅ +1 for master
 
     private ServerSocket serverSocket;
@@ -41,6 +46,8 @@ public class BitXDisplayApp extends Application {
     private static Text pageTitle = new Text("No Page");
     private static Text[] knobLabels = new Text[8];
     private static double[] knobValues = new double[8];
+    private static String playingNotes = "";
+    private static String playingChord = "";
 
     private static boolean isRunning = false; // Ensure only one instance
 
@@ -67,11 +74,11 @@ public class BitXDisplayApp extends Application {
         log("Starting JavaFX application...");
 
 
-        // 🎵 Left: Clip Text Area (900px)
+        // 🎵 Left: Clip Text Area
         clipTextFlow = new TextFlow();
         clipTextFlow.setStyle("-fx-background-color: rgb(65, 65, 65); -fx-padding: 0;");
-        clipTextFlow.setMinWidth(TEXT_WIDTH);
-        clipTextFlow.setPrefWidth(TEXT_WIDTH);
+        clipTextFlow.setMinWidth(CLIP_TEXT_WIDTH);
+        clipTextFlow.setPrefWidth(CLIP_TEXT_WIDTH);
 
         Text initialText = new Text("No Clip");
         initialText.setFont(Font.font("Arial", 18));
@@ -80,7 +87,31 @@ public class BitXDisplayApp extends Application {
 
         StackPane clipPane = new StackPane(clipTextFlow);
         clipPane.setStyle("-fx-background-color: rgb(65, 65, 65); -fx-padding: 0;");
+        clipPane.setMinWidth(CLIP_TEXT_WIDTH);
+        clipPane.setPrefWidth(CLIP_TEXT_WIDTH);
+        clipPane.setMaxWidth(CLIP_TEXT_WIDTH);
+        clipPane.setClip(new Rectangle(CLIP_TEXT_WIDTH, HEIGHT));
 
+        notesText = new Text("");
+        notesText.setFont(Font.font("Arial", 20));
+        notesText.setFill(Color.LIGHTGRAY);
+        notesText.setWrappingWidth(HARMONY_WIDTH - 8);
+
+        chordText = new Text("");
+        chordText.setFont(Font.font("Arial", 20));
+        chordText.setFill(Color.YELLOW);
+        chordText.setWrappingWidth(HARMONY_WIDTH - 8);
+
+        VBox harmonyBox = new VBox(1, notesText, chordText);
+        harmonyBox.setStyle("-fx-background-color: rgb(65, 65, 65); -fx-padding: 3 4 0 4;");
+        harmonyBox.setMinWidth(HARMONY_WIDTH);
+        harmonyBox.setPrefWidth(HARMONY_WIDTH);
+        harmonyBox.setMaxWidth(HARMONY_WIDTH);
+
+        HBox leftPane = new HBox(clipPane, harmonyBox);
+        leftPane.setMinWidth(TEXT_WIDTH);
+        leftPane.setPrefWidth(TEXT_WIDTH);
+        leftPane.setMaxWidth(TEXT_WIDTH);
 
         // 🎛️ Middle: Knobs Area (300px)
         knobsCanvas = new Canvas(KNOBS_WIDTH, HEIGHT);
@@ -93,7 +124,7 @@ public class BitXDisplayApp extends Application {
         metersPane.setStyle("-fx-background-color: rgb(65, 65, 65);");
 
         // Layout
-        HBox root = new HBox(clipPane, knobsPane, metersPane);
+        HBox root = new HBox(leftPane, knobsPane, metersPane);
         Scene scene = new Scene(root, TEXT_WIDTH + KNOBS_WIDTH + METERS_WIDTH, HEIGHT, Color.BLACK);
 
         primaryStage.setScene(scene);
@@ -160,9 +191,12 @@ public class BitXDisplayApp extends Application {
             if (line.startsWith("CLIP:")) {
                 String clipName = line.substring(5);
                 log("Updating clip name to: " + clipName);
-                Platform.runLater(() -> updateClipText(clipName));
-            }
-            if (line.startsWith("PAGE:")) {
+                updateClipText(clipName);
+            } else if (line.startsWith("PLAYING_NOTES:")) {
+                updatePlayingNotes(line.substring("PLAYING_NOTES:".length()));
+            } else if (line.startsWith("PLAYING_CHORD:")) {
+                updatePlayingChord(line.substring("PLAYING_CHORD:".length()));
+            } else if (line.startsWith("PAGE:")) {
                 String pageName = line.substring(5);
                 updateRemoteControlsPageName(pageName);
             } else if (line.startsWith("KNOB_NAME:")) {
@@ -228,8 +262,35 @@ public class BitXDisplayApp extends Application {
 
         clipTextFlow.getChildren().add(text);
 
-        clipTextFlow.setPrefWidth(700);
+        clipTextFlow.setPrefWidth(CLIP_TEXT_WIDTH);
         clipTextFlow.setMaxHeight(65); // allow multiple lines
+    }
+
+    private static void updatePlayingNotes(String notes) {
+        playingNotes = notes.trim();
+        updateHarmonyText();
+    }
+
+    private static void updatePlayingChord(String chord) {
+        playingChord = chord.trim();
+        updateHarmonyText();
+    }
+
+    private static void updateHarmonyText() {
+        if (notesText == null || chordText == null) {
+            return;
+        }
+
+        boolean noNotes = playingNotes.isEmpty();
+        boolean noChord = playingChord.isEmpty() || "N.C.".equals(playingChord);
+        if (noNotes && noChord) {
+            notesText.setText("");
+            chordText.setText("");
+            return;
+        }
+
+        notesText.setText(playingNotes);
+        chordText.setText(noChord ? "" : playingChord);
     }
 
 
