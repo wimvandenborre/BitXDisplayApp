@@ -19,13 +19,12 @@ Create a 'PerSonal' folder inside the Bitwig Studio Extensions folder and put th
 
 ## Tech stack
 
-- Java 17+ (recommended)
+- Java 21+
 - JavaFX 23.0.2 (OpenJFX)
 - Maven
 
-This project uses platform-specific JavaFX binaries in `pom.xml` (currently
-`mac-aarch64`). If you are on another platform, update the JavaFX dependency
-classifiers accordingly.
+Maven resolves the JavaFX native libraries for the operating system on which
+the project is built.
 
 ## Build and run
 
@@ -43,10 +42,34 @@ mvn javafx:run
 
 Built artifacts are placed under `target/`.
 
+## Package for Windows
+
+On Windows, run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\package-windows.ps1
+```
+
+This creates a self-contained application image at:
+
+```text
+target\windows\BitXDisplayApp\BitXDisplayApp.exe
+```
+
+Copy the complete `BitXDisplayApp` directory, not only the executable, into:
+
+```text
+Documents\Bitwig Studio\Extensions\PerSonal\
+```
+
+The packaged app includes its Java runtime, so end users do not need Java or
+Maven installed. See `package.md` for the complete Windows and macOS packaging
+procedures.
+
 ## Network protocol
 
-The app listens on TCP port `9876` and accepts single-line messages. Supported
-messages:
+The app listens on loopback TCP port `127.0.0.1:9876` and accepts single-line
+messages. Supported messages:
 
 - `CLIP:<text>` - set clip name (use `|` for line breaks)
 - `PLAYING_NOTES:<note names>` - set current selected-track MIDI notes

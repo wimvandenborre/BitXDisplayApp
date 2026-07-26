@@ -18,6 +18,8 @@ import javafx.stage.Stage;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -39,7 +41,7 @@ public class BitXDisplayApp extends Application {
     private static float[] meterValues = new float[NUM_TRACKS + 1]; // ✅ +1 for master
 
     private ServerSocket serverSocket;
-    private boolean running = true;
+    private volatile boolean running = true;
     private static Color[] trackColors = new Color[NUM_TRACKS];
     private static Color masterTrackColor = Color.GRAY;
 
@@ -164,8 +166,9 @@ public class BitXDisplayApp extends Application {
 
     private void listenForUpdates() {
         try {
-            serverSocket = new ServerSocket(9876);
-            log("Server socket opened on port 9876.");
+            serverSocket = new ServerSocket();
+            serverSocket.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 9876));
+            log("Server socket opened on 127.0.0.1:9876.");
 
             while (running) {
                 Socket clientSocket = serverSocket.accept();
