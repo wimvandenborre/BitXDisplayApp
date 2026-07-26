@@ -1,4 +1,92 @@
-# Packaging BitXDisplayApp for macOS
+# Packaging BitXDisplayApp
+
+## Windows
+
+The Windows build is a self-contained Java application image. It contains
+`BitXDisplayApp.exe`, the application files, JavaFX native libraries, and a
+private Java runtime.
+
+### Prerequisites
+
+- Windows 10 or later
+- JDK 21 or later, with `java` and `jpackage` on `PATH`
+- Maven, with `mvn` on `PATH`
+
+These tools are required only on the build machine. End users do not need Java
+or Maven.
+
+### Build
+
+From the repository root:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\package-windows.ps1
+```
+
+To assign a different numeric application version:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\package-windows.ps1 -AppVersion 1.1.0
+```
+
+The execution-policy option applies only to that PowerShell process and does
+not change the machine-wide policy.
+
+The application image is created at:
+
+```text
+target\windows\BitXDisplayApp\
+```
+
+The launcher is:
+
+```text
+target\windows\BitXDisplayApp\BitXDisplayApp.exe
+```
+
+The script uses `icons\PerSonal_Logo.ico` when that file is available. Until a
+Windows icon is added, `jpackage` uses its default application icon.
+
+### Install Into Bitwig Extensions
+
+Copy the complete generated `BitXDisplayApp` directory to:
+
+```text
+%USERPROFILE%\Documents\Bitwig Studio\Extensions\PerSonal\
+```
+
+The resulting layout must be:
+
+```text
+PerSonal\
+|-- BitX.bwextension
+`-- BitXDisplayApp\
+    |-- BitXDisplayApp.exe
+    |-- app\
+    `-- runtime\
+```
+
+Do not copy only `BitXDisplayApp.exe`; it requires the adjacent `app` and
+`runtime` directories.
+
+If Windows redirects Documents into OneDrive, install the directory under the
+equivalent OneDrive `Documents\Bitwig Studio\Extensions\PerSonal` location.
+BitX checks the standard Documents directory and the common OneDrive locations.
+
+Start Bitwig, enable `Display Window` in the BitX controller preferences, and
+restart the controller extension. BitX starts the display automatically and
+communicates with it over `127.0.0.1:9876`.
+
+### GitHub Actions
+
+The `Build Windows application` workflow can be run manually. It also runs for
+tags beginning with `v` and uploads `BitXDisplayApp-windows-x64` as a workflow
+artifact.
+
+For a public release, add a Windows `.ico` file and Authenticode-sign the
+generated launcher or installer before distribution.
+
+## macOS
 
 This is the working procedure used to build, sign, notarize, staple, and install
 the BitX display app into the Bitwig Studio Extensions folder.

@@ -1,0 +1,36 @@
+name: Build Windows application
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  package-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build Windows application image
+        shell: pwsh
+        run: ./scripts/package-windows.ps1
+
+      - name: Upload Windows application
+        uses: actions/upload-artifact@v6
+        with:
+          name: BitXDisplayApp-windows-x64
+          path: target/windows/BitXDisplayApp
+          if-no-files-found: error
